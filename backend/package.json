@@ -10,7 +10,7 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "prisma:generate": "prisma generate",
-    "db:migrate": "prisma migrate deploy",
+    "db:migrate": "node scripts/prisma-with-root-env.mjs migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
     "test": "vitest run",
     "test:watch": "vitest"
