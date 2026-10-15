@@ -262,3 +262,5 @@ The candidate reviewed the design decisions and the rules in `docs/system-design
 ## 9. Licence and credits
 
 Private assignment submission. Not licensed for reuse.
+#   M i n i - R F Q - P o r t a l -  
+ 
