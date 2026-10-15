@@ -1,0 +1,201 @@
+// Mini RFQ Portal data model (MySQL 8).
+//
+// Conventions
+// - Money is DECIMAL(16,2) and always treated as INR. Totals are recomputed on the server.
+// - All DateTime values are stored in UTC (DATETIME(3)).
+// - Quote prices are never edited in place. Every submission or revision inserts a new
+//   QuoteRevision with its own line-item snapshot, so history is immutable.
+//
+// engineType = "client" lets the app use the MySQL driver adapter without a native
+// query-engine binary. The generated client type definitions are identical.
+
+generator client {
+  provider   = "prisma-client-js"
+  engineType = "client"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  BUYER
+  VENDOR
+  ADMIN
+}
+
+enum RfqStatus {
+  DRAFT
+  PUBLISHED
+  CLOSED
+  AWARDED
+}
+
+enum QuoteStatus {
+  SUBMITTED
+  SHORTLISTED
+  ACCEPTED
+  REJECTED
+}
+
+enum EntityType {
+  RFQ
+  QUOTE
+}
+
+enum FileKind {
+  PDF
+  XLSX
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String   @db.VarChar(120)
+  email        String   @unique @db.VarChar(191)
+  passwordHash String   @db.VarChar(100)
+  role         Role
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now()) @db.DateTime(3)
+  updatedAt    DateTime @updatedAt @db.DateTime(3)
+
+  rfqs          Rfq[]            @relation("BuyerRfqs")
+  quotes        Quote[]          @relation("VendorQuotes")
+  quoteRevs     QuoteRevision[]  @relation("RevisionAuthor")
+  uploads       FileAttachment[] @relation("Uploader")
+  historyEvents StatusHistory[]  @relation("HistoryActor")
+  awardsMade    Rfq[]            @relation("AwardedBy")
+}
+
+model Rfq {
+  id               String    @id @default(cuid())
+  buyerId          String
+  title            String    @db.VarChar(200)
+  description      String    @db.Text
+  category         String    @db.VarChar(100)
+  deliveryLocation String    @db.VarChar(200)
+  budget           Decimal?  @db.Decimal(16, 2)
+  currency         String    @default("INR") @db.Char(3)
+  deadline         DateTime  @db.DateTime(3)
+  status           RfqStatus @default(DRAFT)
+  publishedAt      DateTime? @db.DateTime(3)
+  awardedAt        DateTime? @db.DateTime(3)
+  awardedById      String?
+  awardedQuoteId   String?   @unique
+  createdAt        DateTime  @default(now()) @db.DateTime(3)
+  updatedAt        DateTime  @updatedAt @db.DateTime(3)
+
+  buyer       User             @relation("BuyerRfqs", fields: [buyerId], references: [id])
+  awardedBy   User?            @relation("AwardedBy", fields: [awardedById], references: [id])
+  awardedQuote Quote?          @relation("AwardedQuote", fields: [awardedQuoteId], references: [id])
+  lineItems   RfqLineItem[]
+  quotes      Quote[]          @relation("RfqQuotes")
+  attachments FileAttachment[] @relation("RfqFiles")
+
+  @@index([status, deadline])
+  @@index([buyerId, status])
+}
+
+model RfqLineItem {
+  id        String @id @default(cuid())
+  rfqId     String
+  name      String @db.VarChar(200)
+  quantity  Int
+  unit      String @db.VarChar(30)
+  sortOrder Int    @default(0)
+
+  rfq         Rfq                    @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+  revisionLines QuoteRevisionLineItem[]
+
+  @@index([rfqId, sortOrder])
+}
+
+model Quote {
+  id        String      @id @default(cuid())
+  rfqId     String
+  vendorId  String
+  status    QuoteStatus @default(SUBMITTED)
+  createdAt DateTime    @default(now()) @db.DateTime(3)
+  updatedAt DateTime    @updatedAt @db.DateTime(3)
+
+  rfq         Rfq              @relation("RfqQuotes", fields: [rfqId], references: [id])
+  vendor      User             @relation("VendorQuotes", fields: [vendorId], references: [id])
+  awardedRfq  Rfq?             @relation("AwardedQuote")
+  revisions   QuoteRevision[]
+  attachments FileAttachment[] @relation("QuoteFiles")
+
+  // One quotation record per vendor per RFQ.
+  @@unique([rfqId, vendorId])
+  @@index([vendorId])
+  @@index([rfqId, status])
+}
+
+model QuoteRevision {
+  id             String   @id @default(cuid())
+  quoteId        String
+  revisionNumber Int
+  deliveryDays   Int
+  notes          String?  @db.Text
+  totalAmount    Decimal  @db.Decimal(16, 2)
+  createdById    String
+  createdAt      DateTime @default(now()) @db.DateTime(3)
+
+  quote     Quote                    @relation(fields: [quoteId], references: [id])
+  createdBy User                     @relation("RevisionAuthor", fields: [createdById], references: [id])
+  lineItems QuoteRevisionLineItem[]
+
+  @@unique([quoteId, revisionNumber])
+  @@index([quoteId, createdAt])
+}
+
+model QuoteRevisionLineItem {
+  id            String  @id @default(cuid())
+  revisionId    String
+  rfqLineItemId String
+  itemName      String  @db.VarChar(200)
+  quantity      Int
+  unit          String  @db.VarChar(30)
+  unitPrice     Decimal @db.Decimal(16, 2)
+  lineTotal     Decimal @db.Decimal(16, 2)
+
+  revision   QuoteRevision @relation(fields: [revisionId], references: [id], onDelete: Cascade)
+  rfqLineItem RfqLineItem  @relation(fields: [rfqLineItemId], references: [id])
+
+  @@unique([revisionId, rfqLineItemId])
+  @@index([rfqLineItemId])
+}
+
+model FileAttachment {
+  id           String   @id @default(cuid())
+  rfqId        String?
+  quoteId      String?
+  kind         FileKind
+  originalName String   @db.VarChar(255)
+  storageKey   String   @unique @db.VarChar(80)
+  mimeType     String   @db.VarChar(100)
+  sizeBytes    Int
+  uploadedById String
+  createdAt    DateTime @default(now()) @db.DateTime(3)
+
+  rfq        Rfq?   @relation("RfqFiles", fields: [rfqId], references: [id])
+  quote      Quote? @relation("QuoteFiles", fields: [quoteId], references: [id])
+  uploadedBy User   @relation("Uploader", fields: [uploadedById], references: [id])
+
+  @@index([rfqId])
+  @@index([quoteId])
+}
+
+model StatusHistory {
+  id         String     @id @default(cuid())
+  entityType EntityType
+  entityId   String     @db.VarChar(191)
+  fromStatus String?    @db.VarChar(32)
+  toStatus   String     @db.VarChar(32)
+  actorId    String?
+  metadata   Json?
+  createdAt  DateTime   @default(now()) @db.DateTime(3)
+
+  actor User? @relation("HistoryActor", fields: [actorId], references: [id])
+
+  @@index([entityType, entityId, createdAt])
+}

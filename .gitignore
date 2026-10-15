@@ -1,0 +1,9 @@
+node_modules/
+dist/
+build/
+coverage/
+.env
+*.log
+backend/uploads/
+backend/generated/
+.DS_Store

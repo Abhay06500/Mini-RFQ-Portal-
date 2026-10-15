@@ -1,0 +1,22 @@
+{
+  "name": "bidveda-mini-rfq-portal",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Mini RFQ Portal: buyers publish RFQs, vendors quote, buyers compare and award.",
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "dev:backend": "npm run dev -w backend",
+    "dev:frontend": "npm run dev -w frontend",
+    "build": "npm run build -w backend && npm run build -w frontend",
+    "test": "npm run test -w backend && npm run test -w frontend",
+    "typecheck": "npm run typecheck -w backend && npm run typecheck -w frontend",
+    "db:migrate": "npm run db:migrate -w backend",
+    "db:seed": "npm run db:seed -w backend"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -1,0 +1,64 @@
+# One-command local stack: MySQL 8, the Express API, and the React app behind nginx.
+#   cp .env.example .env   (then set the secrets)
+#   docker compose up --build
+name: rfq-portal
+
+services:
+  db:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-rfq_dev}
+      MYSQL_USER: ${MYSQL_USER:-rfq}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+    # The database is intentionally not published to the host. Add ports: ["3306:3306"] to connect from a GUI client.
+
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DATABASE_URL: mysql://${MYSQL_USER:-rfq}:${MYSQL_PASSWORD}@db:3306/${MYSQL_DATABASE:-rfq_dev}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env (32+ characters)}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-8h}
+      ADMIN_INVITE_CODE: ${ADMIN_INVITE_CODE:-}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-10}
+      CLOSURE_SWEEP_INTERVAL_MS: ${CLOSURE_SWEEP_INTERVAL_MS:-60000}
+      CORS_ORIGIN: http://localhost:${WEB_PORT:-8080}
+      UPLOAD_DIR: /data/uploads
+      SEED_DEMO_DATA: ${SEED_DEMO_DATA:-false}
+    volumes:
+      - upload-data:/data/uploads
+    expose:
+      - "4000"
+
+  web:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "${WEB_PORT:-8080}:80"
+
+volumes:
+  mysql-data:
+  upload-data:
