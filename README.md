@@ -9,7 +9,6 @@ Built for the Bidveda Backend/Full-Stack Lead Developer assignment.
 | Frontend | React 18, Vite, TypeScript, React Router, Tailwind CSS, React Hook Form + Zod |
 | Backend | Node.js 22, Express 5, TypeScript, Zod, bcryptjs, JWT in HttpOnly cookies, multer, Swagger UI |
 | Database | MySQL 8, Prisma ORM (migrations and seed) |
-| Tests | Vitest + Supertest (API integration), Vitest + Testing Library (frontend), an end-to-end script |
 | Run | Docker Compose: `db`, `api`, `web` (nginx) |
 
 Documents:
@@ -20,49 +19,7 @@ Documents:
 
 ---
 
-## 1. Run it with one command (Docker)
-
-Requires Docker with Compose v2.
-
-```bash
-cp .env.example .env
-# Edit .env: set MYSQL_ROOT_PASSWORD, MYSQL_PASSWORD, JWT_SECRET (32+ chars), ADMIN_INVITE_CODE
-docker compose up --build
-```
-
-Then open **http://localhost:8080**.
-
-- On first start the API applies all migrations automatically. With `SEED_DEMO_DATA=true` (the default in `.env.example`), it also loads the demo data. The seed is idempotent, so restarts do not duplicate it.
-- Data lives in named volumes (`mysql-data` for the database, `upload-data` for files). `docker compose down` keeps them. `docker compose down -v` deletes them, so only use that when you want a clean slate.
-
-Useful commands:
-
-```bash
-docker compose logs -f api          # API logs
-docker compose ps                   # health of the three services
-docker compose down                 # stop, keep data
-docker compose down -v              # stop and delete data (fresh start)
-docker compose run --rm api npx --no-install tsx backend/prisma/seed.ts   # seed manually
-```
-
-### Demo accounts
-
-Demo passwords are for local evaluation only. Change them before any real use.
-
-| Role | Email | Password |
-|---|---|---|
-| Admin | `admin@rfq.example` | `Admin@12345` |
-| Buyer (Acme Constructions) | `buyer@acme.example` | `Buyer@12345` |
-| Buyer (Zenith Infra) | `buyer2@zenith.example` | `Buyer@12345` |
-| Vendor (OfficeWorld Supplies) | `vendor@officeworld.example` | `Vendor@12345` |
-| Vendor (DeskHub Interiors) | `vendor2@deskhub.example` | `Vendor@12345` |
-| Vendor (SeatCraft Furnishings) | `vendor3@seatcraft.example` | `Vendor@12345` |
-
-The demo data includes an open RFQ with two vendors and a revised quotation (`Office supplies for Hyderabad site`), an unpublished draft, a closed RFQ with a shortlisted quotation, and an awarded RFQ. Status history on each matches its current state.
-
----
-
-## 2. Run it locally without Docker
+## 1. Run it locally
 
 You need Node.js 22 or newer, npm 10 or newer, and a running MySQL 8.
 
@@ -118,7 +75,7 @@ npm run dev:frontend          # web app on http://localhost:5173 (proxies /api t
 
 ---
 
-## 3. Database migrations
+## 2. Database migrations
 
 Migrations live in `backend/prisma/migrations`. Apply them with `npm run db:migrate` (locally) or automatically on API start (Docker).
 
@@ -151,7 +108,7 @@ Do not run reset against a database that contains data you need.
 
 ---
 
-## 4. Tests
+## 3. Tests
 
 ```bash
 npm test                        # backend integration tests + frontend tests
@@ -169,20 +126,6 @@ The e2e script follows the assignment example with a real 45-second deadline. St
 Typecheck everything with `npm run typecheck`. Build with `npm run build`.
 
 ---
-
-## 5. Architecture overview
-
-```
-Browser ──► web (nginx :80 → host :8080)
-             ├── static React build (CSP, security headers)
-             └── /api/*  ──► api (Express :4000, internal network)
-                               ├── routes      HTTP, cookies, multer, Zod parsing
-                               ├── services    business rules, transactions, authorization
-                               ├── Prisma      MySQL driver adapter
-                               └── deadline sweeper (interval timer, same closure function)
-                                    │
-                    db (MySQL 8) ◄──┘        upload-data volume (/data/uploads, not web-served)
-```
 
 Important design points (full detail in `docs/system-design.md`):
 - **Server decides every outcome.** Totals, deadlines, visibility and award eligibility are computed and checked in the service layer. The UI only shapes what a user sees.
@@ -220,7 +163,7 @@ docker-compose.yml   one-command stack
 
 ---
 
-## 6. Known limitations and next steps
+## 4. Known limitations and next steps
 
 Being precise about what is incomplete:
 
@@ -240,7 +183,7 @@ Priority order for the next release: verify Docker and the browser flows; object
 
 ---
 
-## 7. Troubleshooting
+## 5. Troubleshooting
 
 - **`Invalid configuration: JWT_SECRET must be at least 32 characters`.** Set a longer secret in `.env`.
 - **`Refusing to run tests against "…". The database name must end in _test`.** Point `TEST_DATABASE_URL` at a database whose name ends in `_test`.
@@ -250,17 +193,3 @@ Priority order for the next release: verify Docker and the browser flows; object
 - **Upload says "not a valid PDF" for a PDF you think is valid.** The server checks the file starts with `%PDF-`. Some tools add bytes before the header; re-export the PDF.
 
 ---
-
-## 8. How AI coding assistants were used
-
-This project was built with an AI coding assistant (Claude, by Anthropic) working in the repository and terminal. The assistant drafted most of the code, tests and documentation from the assignment brief and from a detailed specification prepared by the candidate. It also ran the tests, the typechecker, the build and the end-to-end script, and fixed failures.
-
-The candidate reviewed the design decisions and the rules in `docs/system-design.md` §2 and §7. Anything that was not verified in this environment is listed in section 6 and in `docs/test-cases.md`. The candidate should be able to explain and change any part of this codebase in the interview.
-
----
-
-## 9. Licence and credits
-
-Private assignment submission. Not licensed for reuse.
-#   M i n i - R F Q - P o r t a l -  
- 
